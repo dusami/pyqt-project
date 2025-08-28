@@ -27,35 +27,36 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         # 设置窗口标题
-        self.setWindowTitle("我的第一个PyQt应用")
+        self.setWindowTitle("分布式光纤温度监测系统")
         # 设置窗口初始大小
-        self.setGeometry(300, 300, 300, 200)  # x, y, width, height
+        self.setGeometry(100, 100, 1600, 900)  # x, y, width, height
 
-        # --- 创建界面组件 ---
-        # 创建一个标签 (Label)
-        self.label = QLabel("Hello, World!")
 
-        # 创建一个按钮 (Button)
-        self.button = QPushButton("点我")
-
-        # --- 绑定事件 ---
-        # 将按钮的 "clicked" 信号连接到 "on_button_clicked" 方法（槽）
-        self.button.clicked.connect(self.on_button_clicked)
-
-        # --- 设置布局 ---
-        # 创建一个垂直布局管理器
-        layout = QVBoxLayout()
-        # 将标签和按钮添加到布局中
-        layout.addWidget(self.label)
-        layout.addWidget(self.button)
-
-        # 创建一个中央小部件 (central widget)，因为 QMainWindow 需要一个中央小部件
-        central_widget = QWidget()
-        # 将布局应用到这个中央小部件上
-        central_widget.setLayout(layout)
-
-        # 将这个设置好布局的中央小部件设置为主窗口的中央小部件
-        self.setCentralWidget(central_widget)
+        # # --- 创建界面组件 ---
+        # # 创建一个标签 (Label)
+        # self.label = QLabel("Hello, World!")
+        #
+        # # 创建一个按钮 (Button)
+        # self.button = QPushButton("点我")
+        #
+        # # --- 绑定事件 ---
+        # # 将按钮的 "clicked" 信号连接到 "on_button_clicked" 方法（槽）
+        # self.button.clicked.connect(self.on_button_clicked)
+        #
+        # # --- 设置布局 ---
+        # # 创建一个垂直布局管理器
+        # layout = QVBoxLayout()
+        # # 将标签和按钮添加到布局中
+        # layout.addWidget(self.label)
+        # layout.addWidget(self.button)
+        #
+        # # 创建一个中央小部件 (central widget)，因为 QMainWindow 需要一个中央小部件
+        # central_widget = QWidget()
+        # # 将布局应用到这个中央小部件上
+        # central_widget.setLayout(layout)
+        #
+        # # 将这个设置好布局的中央小部件设置为主窗口的中央小部件
+        # self.setCentralWidget(central_widget)
 
     # 3. 定义按钮点击后要执行的方法（槽函数）
     def on_button_clicked(self):
