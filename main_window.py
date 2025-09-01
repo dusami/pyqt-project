@@ -9,13 +9,16 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtGui import QFont, QIcon
 from PyQt5.QtCore import Qt
 
-
+# 主界面窗口
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
         self.setWindowTitle("分布式光纤温度监测系统 测试版1.0")
-        self.setGeometry(100, 100, 1600, 900)  # 设置一个较大的默认窗口尺寸
+        # 设置一个较大的默认窗口尺寸,x, y, width, height
+        self.setGeometry(100, 100, 1200, 800)
+        # 启动时最大化
+        self.showMaximized()
 
         # --- 创建菜单栏和状态栏 ---
         self._create_menu_bar()
@@ -30,11 +33,11 @@ class MainWindow(QMainWindow):
 
         # --- 创建左侧面板 ---
         left_panel = self._create_left_panel()
-        main_layout.addWidget(left_panel)
+        main_layout.addWidget(left_panel, 1)
 
         # --- 创建右侧面板 ---
         right_panel = self._create_right_panel()
-        main_layout.addWidget(right_panel, 5)  # 让右侧面板占据更多空间 (比例为5:1)
+        main_layout.addWidget(right_panel, 7)  # 让右侧面板占据更多空间 (比例为7:1)
 
     def _create_menu_bar(self):
         menu_bar = self.menuBar()
@@ -62,8 +65,18 @@ class MainWindow(QMainWindow):
             menu_bar.addMenu(menu_name)
 
     def connect_device(self):
-        pass
+        """处理点击“设备连接”菜单项的逻辑"""
+        print("正在执行：设备连接...")
+        # 在这里，你可以启动你的网络线程或调用其连接方法
+        # 例如: self.network_thread.start() 或 self.network_thread.connect_to_server()
+        self.statusBar.showMessage("正在连接设备...")
+
     def disconnect_device(self):
+        """处理点击“设备断开”菜单项的逻辑"""
+        print("正在执行：设备断开...")
+        # 在这里，你可以停止你的网络线程
+        # 例如: self.network_thread.stop()
+        self.statusBar.showMessage("设备已断开。")
         pass
 
     def _create_status_bar(self):
@@ -77,9 +90,10 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(left_widget)
         layout.setSpacing(20)
 
-        # 1. 通道列表
-        channel_group = QGroupBox("当前DTS主机:[Next1]")
+        # 1. 通道列表(分组框)
+        channel_group = QGroupBox("当前DTS主机:[Host1]")
         channel_layout = QVBoxLayout()
+        # 创建一个列表控件用于显示通道列表
         self.channel_list = QListWidget()
         for i in range(1, 8):
             self.channel_list.addItem(f"  测量通道{i}")
@@ -127,44 +141,44 @@ class MainWindow(QMainWindow):
         return left_widget
 
     def _create_right_panel(self):
-        """创建并返回右侧面板的QWidget"""
+        # """创建并返回右侧面板的QWidget"""
         right_widget = QWidget()
-        layout = QVBoxLayout(right_widget)
-
-        # 1. 图表上方的控制栏 (简化版)
-        plot_control_layout = QHBoxLayout()
-        plot_control_layout.addWidget(QLabel("通道: 通道1 [16:11:22]"))
-        plot_control_layout.addStretch()  # 添加伸缩项，将按钮推到右边
-        plot_control_layout.addWidget(QPushButton("功能按钮"))
-        plot_control_layout.addWidget(QPushButton("历史查询"))
-        plot_control_layout.addWidget(QPushButton("实时曲线"))
-
-        # 2. 中间的图表区域
-        self.plot_widget = pg.PlotWidget()
-        self.plot_widget.setBackground('w')  # 设置背景为白色
-        self.plot_widget.showGrid(x=True, y=True, alpha=0.5)
-        self.plot_widget.setLabel('left', '温度 (°C)')
-        self.plot_widget.setLabel('bottom', '距离 (m)')
-        self.plot_widget.setTitle('温度曲线', color='k', size='12pt')
-
-        # 绘制示例曲线
-        self._plot_sample_data()
-
-        # 3. 底部的日志表格
-        self.log_table = QTableWidget()
-        self.log_table.setColumnCount(6)
-        self.log_table.setHorizontalHeaderLabels(["时间", "通道", "区域", "内容", "设定阈值", "实际温度"])
-        self.log_table.setEditTriggers(QAbstractItemView.NoEditTriggers)  # 禁止编辑
-        self.log_table.setSelectionBehavior(QAbstractItemView.SelectRows)  # 整行选择
-        self.log_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)  # 列宽自适应
-
-        # 添加示例日志数据
-        self._add_sample_log_data()
-
-        # 将所有组件添加到右侧布局中
-        layout.addLayout(plot_control_layout)
-        layout.addWidget(self.plot_widget, 4)  # 图表比例为4
-        layout.addWidget(self.log_table, 1)  # 表格比例为1
+        # layout = QVBoxLayout(right_widget)
+        #
+        # # 1. 图表上方的控制栏 (简化版)
+        # plot_control_layout = QHBoxLayout()
+        # plot_control_layout.addWidget(QLabel("通道: 通道1 [16:11:22]"))
+        # plot_control_layout.addStretch()  # 添加伸缩项，将按钮推到右边
+        # plot_control_layout.addWidget(QPushButton("功能按钮"))
+        # plot_control_layout.addWidget(QPushButton("历史查询"))
+        # plot_control_layout.addWidget(QPushButton("实时曲线"))
+        #
+        # # 2. 中间的图表区域
+        # self.plot_widget = pg.PlotWidget()
+        # self.plot_widget.setBackground('w')  # 设置背景为白色
+        # self.plot_widget.showGrid(x=True, y=True, alpha=0.5)
+        # self.plot_widget.setLabel('left', '温度 (°C)')
+        # self.plot_widget.setLabel('bottom', '距离 (m)')
+        # self.plot_widget.setTitle('温度曲线', color='k', size='12pt')
+        #
+        # # 绘制示例曲线
+        # self._plot_sample_data()
+        #
+        # # 3. 底部的日志表格
+        # self.log_table = QTableWidget()
+        # self.log_table.setColumnCount(6)
+        # self.log_table.setHorizontalHeaderLabels(["时间", "通道", "区域", "内容", "设定阈值", "实际温度"])
+        # self.log_table.setEditTriggers(QAbstractItemView.NoEditTriggers)  # 禁止编辑
+        # self.log_table.setSelectionBehavior(QAbstractItemView.SelectRows)  # 整行选择
+        # self.log_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)  # 列宽自适应
+        #
+        # # 添加示例日志数据
+        # self._add_sample_log_data()
+        #
+        # # 将所有组件添加到右侧布局中
+        # layout.addLayout(plot_control_layout)
+        # layout.addWidget(self.plot_widget, 4)  # 图表比例为4
+        # layout.addWidget(self.log_table, 1)  # 表格比例为1
 
         return right_widget
 
