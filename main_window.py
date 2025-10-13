@@ -187,7 +187,7 @@ class MainWindow(QMainWindow):
 
         # 绘制示例曲线
         pen = pg.mkPen(color='b', width=2)
-        self.temp_curve = self.plot_widget.plot(pen)
+        self.temp_curve = self.plot_widget.plot(pen = pen)  #这里只写了pen所以报错了，因为第一个数据本该是x轴数据，所以类型错误，需要指定pen=pen
 
         # 3. 底部的日志表格
         self.log_table = QTableWidget()
