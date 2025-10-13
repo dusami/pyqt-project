@@ -7,37 +7,60 @@ from PyQt5.QtWidgets import (
     QTableWidgetItem, QAbstractItemView, QHeaderView, QMenuBar, QAction, QStatusBar
 )
 from PyQt5.QtGui import QFont, QIcon
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, pyqtSlot
+
+from main_window2 import DataParser, NetworkThread
+
+# 配置网络参数
+MCU_IP = "192.168.100.123"  # MCU的IP地址
+MCU_PORT = 5000             # MCU的通信端口
+
 
 # 主界面窗口
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
+        # --- 1. 基本窗口设置 ---
         self.setWindowTitle("分布式光纤温度监测系统 测试版1.0")
         # 设置一个较大的默认窗口尺寸,x, y, width, height
+        # 这里可以设置本电脑分辨率的80%
         self.setGeometry(100, 100, 1200, 800)
         # 启动时最大化
         self.showMaximized()
 
-        # --- 创建菜单栏和状态栏 ---
+        # --- 2. 创建UI组件 ---
+        # 创建菜单栏和状态栏
         self._create_menu_bar()
         self._create_status_bar()
 
-        # --- 主窗口中心布局 ---
+        # 主窗口中心布局
         main_widget = QWidget()
         self.setCentralWidget(main_widget)
 
         # 使用水平布局，将窗口分为左右两部分
         main_layout = QHBoxLayout(main_widget)
 
-        # --- 创建左侧面板 ---
+        # 创建左侧、右侧面板
         left_panel = self._create_left_panel()
-        main_layout.addWidget(left_panel, 1)
-
-        # --- 创建右侧面板 ---
         right_panel = self._create_right_panel()
+
+        main_layout.addWidget(left_panel, 1)
         main_layout.addWidget(right_panel, 7)  # 让右侧面板占据更多空间 (比例为7:1)
+
+        # --- 3. 【核心】集成后台逻辑 ---
+        # a.创建数据解析器和网络线程
+        self.parser = DataParser()
+        self.network_thread = NetworkThread(MCU_IP, MCU_PORT, self.parser)
+
+        # b.连接信号和槽（前后台能沟通的关键） ---
+        # self.network_thread.connection_status.connect(self.update_status)
+
+        self.parser.temperature_data_ready.connect(self.update_temperature_display)
+        # self.parser.device_params_ready.connect(self.update_device_params_display)
+
+        # c.启动网络线程，让它开始在后台工作
+        self.network_thread.start()
 
     def _create_menu_bar(self):
         menu_bar = self.menuBar()
@@ -90,12 +113,12 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(left_widget)
         layout.setSpacing(20)
 
-        # 1. 通道列表(分组框)
+        # 1. 通道列表(创建带标题的分组框)
         channel_group = QGroupBox("当前DTS主机:[Host1]")
         channel_layout = QVBoxLayout()
         # 创建一个列表控件用于显示通道列表
         self.channel_list = QListWidget()
-        for i in range(1, 8):
+        for i in range(1, 9):
             self.channel_list.addItem(f"  测量通道{i}")
         # 设置图标等可以后续添加
         channel_layout.addWidget(self.channel_list)
@@ -143,59 +166,68 @@ class MainWindow(QMainWindow):
     def _create_right_panel(self):
         # """创建并返回右侧面板的QWidget"""
         right_widget = QWidget()
-        # layout = QVBoxLayout(right_widget)
-        #
-        # # 1. 图表上方的控制栏 (简化版)
-        # plot_control_layout = QHBoxLayout()
-        # plot_control_layout.addWidget(QLabel("通道: 通道1 [16:11:22]"))
-        # plot_control_layout.addStretch()  # 添加伸缩项，将按钮推到右边
-        # plot_control_layout.addWidget(QPushButton("功能按钮"))
-        # plot_control_layout.addWidget(QPushButton("历史查询"))
-        # plot_control_layout.addWidget(QPushButton("实时曲线"))
-        #
-        # # 2. 中间的图表区域
-        # self.plot_widget = pg.PlotWidget()
-        # self.plot_widget.setBackground('w')  # 设置背景为白色
-        # self.plot_widget.showGrid(x=True, y=True, alpha=0.5)
-        # self.plot_widget.setLabel('left', '温度 (°C)')
-        # self.plot_widget.setLabel('bottom', '距离 (m)')
-        # self.plot_widget.setTitle('温度曲线', color='k', size='12pt')
-        #
-        # # 绘制示例曲线
-        # self._plot_sample_data()
-        #
-        # # 3. 底部的日志表格
-        # self.log_table = QTableWidget()
-        # self.log_table.setColumnCount(6)
-        # self.log_table.setHorizontalHeaderLabels(["时间", "通道", "区域", "内容", "设定阈值", "实际温度"])
-        # self.log_table.setEditTriggers(QAbstractItemView.NoEditTriggers)  # 禁止编辑
-        # self.log_table.setSelectionBehavior(QAbstractItemView.SelectRows)  # 整行选择
-        # self.log_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)  # 列宽自适应
-        #
-        # # 添加示例日志数据
-        # self._add_sample_log_data()
-        #
-        # # 将所有组件添加到右侧布局中
-        # layout.addLayout(plot_control_layout)
-        # layout.addWidget(self.plot_widget, 4)  # 图表比例为4
-        # layout.addWidget(self.log_table, 1)  # 表格比例为1
+        layout = QVBoxLayout(right_widget)
+
+        # 1. 图表上方的控制栏 (简化版)
+        plot_control_layout = QHBoxLayout()
+        plot_control_layout.addWidget(QLabel("通道: 通道1 [16:11:22]"))
+        plot_control_layout.addStretch()  # 添加伸缩项，将按钮推到右边
+        plot_control_layout.addWidget(QPushButton("功能按钮"))
+        plot_control_layout.addWidget(QPushButton("历史查询"))
+        plot_control_layout.addWidget(QPushButton("实时曲线"))
+
+        # 2. 中间的图表区域
+        self.plot_widget = pg.PlotWidget()
+        self.plot_widget.setBackground('w')  # 设置背景为白色
+        self.plot_widget.showGrid(x=True, y=True, alpha=0.5)
+        self.plot_widget.setLabel('left', '温度 (°C)')
+        self.plot_widget.setLabel('bottom', '距离 (m)')
+        self.plot_widget.setTitle('温度曲线', color='k', size='12pt')
+        self.plot_widget.setYRange(10, 80)  # 设置一个默认的Y轴范围
+
+        # 绘制示例曲线
+        pen = pg.mkPen(color='b', width=2)
+        self.temp_curve = self.plot_widget.plot(pen)
+
+        # 3. 底部的日志表格
+        self.log_table = QTableWidget()
+        self.log_table.setColumnCount(6)
+        self.log_table.setHorizontalHeaderLabels(["时间", "通道", "区域", "内容", "设定阈值", "实际温度"])
+        self.log_table.setEditTriggers(QAbstractItemView.NoEditTriggers)  # 禁止编辑
+        self.log_table.setSelectionBehavior(QAbstractItemView.SelectRows)  # 整行选择
+        self.log_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)  # 列宽自适应
+
+        # 添加示例日志数据
+        self._add_sample_log_data()
+
+        # 将所有组件添加到右侧布局中
+        layout.addLayout(plot_control_layout)
+        layout.addWidget(self.plot_widget, 4)  # 图表比例为4
+        layout.addWidget(self.log_table, 1)  # 表格比例为1
 
         return right_widget
 
-    def _plot_sample_data(self):
-        """生成并绘制与截图中类似的示例数据"""
-        # 生成 x 轴数据 (距离)
-        x = np.arange(0, 1200, 1)
-        # 生成 y 轴数据 (温度)
-        y = np.full_like(x, 37.5, dtype=float)
-        # 添加一些随机噪声
-        y += np.random.normal(0, 0.3, len(x))
-        # 在1000m处创建一个阶跃下降
-        y[1000:] -= 15
-        y[1000:] += np.random.normal(0, 0.2, len(y[1000:]))
+    @pyqtSlot(dict)
+    def update_temperature_display(self, data: dict):
+        """
+        核心槽函数：接收解析后的温度数据并更新图表。
+        `data` 是从 DataParser 发射过来的包含所有信息的字典。
+        """
+        # a. 从字典中安全地取出温度数据（NumPy数组）
+        temperatures = data.get("temperatures")
+        if temperatures is None:
+            return
 
-        pen = pg.mkPen(color=(0, 0, 200), width=2)  # 蓝色画笔
-        self.plot_widget.plot(x, y, pen=pen)
+        # b. 创建X轴数据（距离）
+        num_points = len(temperatures)
+        distances = np.arange(0, num_points * 0.5, 0.5)
+
+        # c. 【关键】使用 setData() 高效更新曲线
+        self.temp_curve.setData(distances, temperatures)
+
+        # d. (可选) 更新一些摘要信息
+        # max_temp = np.max(temperatures)
+        # self.statusBar.showMessage(f"数据已更新 | 通道: {data.get('channel_id')} | 最高温度: {max_temp:.2f}°C")
 
     def _add_sample_log_data(self):
         """向表格中添加示例数据"""
@@ -208,6 +240,11 @@ class MainWindow(QMainWindow):
         for i in range(5):
             self.log_table.insertRow(self.log_table.rowCount())
 
+    def closeEvent(self, event):
+        """重写窗口关闭事件，确保在关闭窗口时，后台线程也能被安全地停止。"""
+        print("正在关闭应用程序...")
+        self.network_thread.stop()
+        event.accept()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

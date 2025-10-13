@@ -1,4 +1,6 @@
 import struct
+
+import numpy as np
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtCore import QThread, pyqtSignal, Qt
 import socket
@@ -109,50 +111,53 @@ class DataParser(QObject):
 
     def _parse_temperature_packet(self, packet: bytes):
         """解析温度数据包"""
-        print("温度数据包接收成功")
-        print(f"接收到 {len(packet)}字节数据")
+        print(f"温度数据包接收成功！接收到 {len(packet)}字节数据")
+        # 已经接收到16023个字节，这是一个完整的温度数据包
         try:
             pass
-    #         # 根据协议文档解析头部信息
-    #         # '<' 表示小端序（低位在前高位在后）
-    #         # 'B' 表示 unsigned char (1 byte)
-    #         # 'H' 表示 unsigned short (2 bytes)
-    #         header_format = '<8s B H B B H H H H H B'
-    #         header_size = struct.calcsize(header_format)
-    #
-    #         header_data = struct.unpack(header_format, packet[:header_size])
-    #
-    #         parsed = {
-    #             "device_id": header_data[1],
-    #             "total_len": header_data[2],
-    #             "data_type": header_data[3],
-    #             "channel_id": header_data[5],
-    #             "data_start_point": header_data[6],
-    #             "data_end_point": header_data[7],
-    #             "total_channels": header_data[8],
-    #             "current_channel": header_data[9]
-    #         }
-    #
-    #         # 解析实际的温度数据
-    #         # 每个温度点是 short int (2字节), 低位在前
-    #         temp_data_bytes = packet[header_size:-1]  # -1 去掉结尾的0x55
-    #
-    #         # '<' 小端序, 'h' 表示 signed short (2 bytes)
-    #         num_points = len(temp_data_bytes) // 2
-    #         temp_format = f'<{num_points}h'
-    #
-    #         raw_temps = struct.unpack(temp_format, temp_data_bytes)
-    #
-    #         # 实际温度 = 解调值 / 100
-    #         actual_temps = [t / 100.0 for t in raw_temps]
-    #
-    #         parsed["temperatures"] = actual_temps
-    #
-    #         print(f"通道 {parsed['channel_id']} 收到 {len(actual_temps)} 个温度点")
-    #
-    #         # 发送信号
-    #         self.temperature_data_ready.emit(parsed)
-    #
+            # 根据协议文档解析头部信息
+            # '<' 表示小端序（低位在前高位在后）
+            # 'B' 表示 unsigned char (1 byte)
+            # 'H' 表示 unsigned short (2 bytes)
+            header_format = '<8s B H B B H H H H B'
+            header_size = struct.calcsize(header_format)  #计算这个结构占多少字节，固定是22字节
+
+            header_data = struct.unpack(header_format, packet[:header_size]) # 通过切片操作，只取出头部对应的字节（22字节）
+            # 将元组中的数据放到字典中
+            parsed = {
+                "device_id": header_data[1],        # 1个字节：设备ID
+                "total_len": header_data[2],        # 2个字节：总数据长度
+                "data_type": header_data[3],        # 1个字节：数据类型标志位（？0x00）
+                                                    # 1个字节：保留位（跳过）
+                "channel_id": header_data[5],       # 2个字节：通道标志位
+                "data_start_point": header_data[6], # 2个字节：数据起点位置
+                "data_end_point": header_data[7],   # 2个字节：数据终点位置
+                "total_channels": header_data[8],   # 2个字节：总通道数量
+                "current_channel": header_data[9]   # 1个字节：当前通道号（？？）
+            }
+
+            # 解析实际的温度数据
+            # 每个温度点是 short int (2字节), 低位在前
+            temp_data_bytes = packet[header_size:-1]  # -1 去掉结尾的0x55
+
+            # '<' 小端序, 'h' 表示 signed short (2 bytes)
+            num_points = len(temp_data_bytes) // 2      # 8000个温度点
+            temp_format = f'<{num_points}h'
+
+            # 解包的数据是元组，需要转成numpy数组
+            raw_temps_tuple = struct.unpack(temp_format, temp_data_bytes)
+            raw_temps_np = np.array(raw_temps_tuple)
+
+            # 实际温度 = 解调值 / 100
+            actual_temps = (raw_temps_np - 20000) / 100.0
+
+            parsed["temperatures"] = actual_temps
+
+            print(f"通道 {parsed['channel_id']} 收到 {len(actual_temps)} 个温度点")
+            print(actual_temps)
+            # 发送信号
+            self.temperature_data_ready.emit(parsed)
+
         except Exception as e:
             print(f"解析温度数据包失败: {e}")
 
