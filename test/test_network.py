@@ -41,7 +41,10 @@ def connect_and_receive():
 
             # 打印收到的数据信息
             # 我们将收到的原始二进制数据转换成十六进制字符串打印出来，方便你和协议文档对比
+            # 生成器表达式；{byte:02X}：格式化说明符；至少两位数字，不足时前面补0
+            # {byte:02X}：格式说明符；X 表示十六进制（大写字母 A-F）；02 表示宽度为 2，不足两位前面补 0。
             hex_data = ' '.join(f'0x{byte:02X}' for byte in data)
+
             print(f"接收到 {len(data)} 字节数据: {hex_data}")
 
     except socket.timeout:

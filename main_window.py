@@ -4,7 +4,7 @@ import pyqtgraph as pg
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QGroupBox, QListWidget, QPushButton, QLabel, QTableWidget,
-    QTableWidgetItem, QAbstractItemView, QHeaderView, QMenuBar, QAction, QStatusBar
+    QTableWidgetItem, QAbstractItemView, QHeaderView, QMenuBar, QAction, QStatusBar, QRadioButton, QMessageBox
 )
 from PyQt5.QtGui import QFont, QIcon
 from PyQt5.QtCore import Qt, pyqtSlot
@@ -168,13 +168,27 @@ class MainWindow(QMainWindow):
         right_widget = QWidget()
         layout = QVBoxLayout(right_widget)
 
-        # 1. 图表上方的控制栏 (简化版)
-        plot_control_layout = QHBoxLayout()
-        plot_control_layout.addWidget(QLabel("通道: 通道1 [16:11:22]"))
-        plot_control_layout.addStretch()  # 添加伸缩项，将按钮推到右边
-        plot_control_layout.addWidget(QPushButton("功能按钮"))
-        plot_control_layout.addWidget(QPushButton("历史查询"))
-        plot_control_layout.addWidget(QPushButton("实时曲线"))
+        # 1. 图表上方的图像缩放
+        zoom_groupbox = QGroupBox()
+        zoom_layout = QHBoxLayout()  # 用水平布局来排列单选按钮
+
+        self.rb_zoom_xy = QRadioButton("矩阵缩放")
+        self.rb_zoom_x = QRadioButton("X轴缩放")
+        self.rb_zoom_y = QRadioButton("Y轴缩放")
+        self.rb_zoom_xy.setChecked(True)        # 设置“矩阵缩放”为默认选中状态
+
+        self.help_button = QPushButton("...")
+        # self.help_button.setFixedSize(25, 25)
+        self.help_button.setToolTip("图形窗口快捷键说明")
+
+        zoom_layout.addStretch()  # 添加伸缩项，让按钮靠左排列
+        zoom_layout.addWidget(self.rb_zoom_xy)
+        zoom_layout.addWidget(self.rb_zoom_x)
+        zoom_layout.addWidget(self.rb_zoom_y)
+
+        zoom_layout.addWidget(self.help_button)
+
+        zoom_groupbox.setLayout(zoom_layout)
 
         # 2. 中间的图表区域
         self.plot_widget = pg.PlotWidget()
@@ -200,12 +214,62 @@ class MainWindow(QMainWindow):
         # 添加示例日志数据
         self._add_sample_log_data()
 
+        #将按钮的点击信号连接到槽函数
+        self.rb_zoom_xy.toggled.connect(self.on_zoom_mode_changed)
+        self.rb_zoom_x.toggled.connect(self.on_zoom_mode_changed)
+        self.rb_zoom_y.toggled.connect(self.on_zoom_mode_changed)
+        self.help_button.clicked.connect(self.show_zoom_help_popup)
+
         # 将所有组件添加到右侧布局中
-        layout.addLayout(plot_control_layout)
+        layout.addWidget(zoom_groupbox)  # 先添加单选按钮组
         layout.addWidget(self.plot_widget, 4)  # 图表比例为4
         layout.addWidget(self.log_table, 1)  # 表格比例为1
 
         return right_widget
+
+    @pyqtSlot()
+    def show_zoom_help_popup(self):
+        """
+        槽函数：创建一个并显示关于缩放模式的帮助信息弹窗。
+        """
+        # 使用 QMessageBox.information() 创建一个标准的信息提示框
+        QMessageBox.information(
+            self,  # 第一个参数是父窗口
+            "缩放模式说明",  # 第二个参数是弹窗的标题
+            # 第三个参数是弹窗要显示的主要内容
+            "这里是对三种缩放模式的详细说明：\n\n"
+            "• 自由缩放: 默认模式。鼠标滚轮可同时缩放X和Y轴，按住左键拖动可平移视图。\n\n"
+            "• 仅X轴: 锁定Y轴。鼠标操作将只影响水平方向的缩放和平移。\n\n"
+            "• 仅Y轴: 锁定X轴。鼠标操作将只影响垂直方向的缩放和平移。"
+        )
+    @pyqtSlot(bool)
+    def on_zoom_mode_changed(self, checked):
+        """
+        一个槽函数处理所有缩放模式单选按钮的状态变化。
+        """
+        # 如果信号是由于“被取消选中”而发射的，我们直接忽略，只处理“被选中”的情况
+        if not checked:
+            return
+
+        # 获取是哪个按钮发射了这个信号
+        sender = self.sender()
+        view_box = self.plot_widget.getViewBox()
+
+        if sender == self.rb_zoom_xy:
+            # 模式：XY缩放
+            view_box.setMouseEnabled(x=True, y=True)
+            view_box.enableAutoRange()  # 切换到自由模式时，自动恢复一次视图
+            print("已切换到XY缩放模式")
+
+        elif sender == self.rb_zoom_x:
+            # 模式：仅X轴
+            view_box.setMouseEnabled(x=True, y=False)
+            print("已切换到仅X轴缩放模式")
+
+        elif sender == self.rb_zoom_y:
+            # 模式：仅Y轴
+            view_box.setMouseEnabled(x=False, y=True)
+            print("已切换到仅Y轴缩放模式")
 
     @pyqtSlot(dict)
     def update_temperature_display(self, data: dict):

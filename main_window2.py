@@ -154,7 +154,7 @@ class DataParser(QObject):
             parsed["temperatures"] = actual_temps
 
             print(f"通道 {parsed['channel_id']} 收到 {len(actual_temps)} 个温度点")
-            print(actual_temps)
+            # print(actual_temps)
             # 发送信号
             self.temperature_data_ready.emit(parsed)
 
@@ -200,6 +200,7 @@ class NetworkThread(QThread):
         while self.running:
             try:
                 # self.connection_status.emit(f"正在连接到 {self.host}:{self.port}...")
+                #创建一个TCP网络连接；指定使用IPv4地址族；指定使用TCP协议
                 self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 self._socket.settimeout(5)
                 print(f"正在尝试连接到 {MCU_IP}:{MCU_PORT} ...")
@@ -237,30 +238,28 @@ class NetworkThread(QThread):
                 print("❌ 错误：未知错误。")
                 time.sleep(5)
 
-        #主窗口关闭时，调用此方法停止线程
-        def stop(self):
-            self.running = False
-            if self._socket:
-                try:
-                    # 关闭socket以中断阻塞的recv调用
-                    self._socket.shutdown(socket.SHUT_RDWR)
-                    self._socket.close()
-                except OSError:
-                    pass
-            self.quit()
-            self.wait()
+    # 主窗口关闭时，调用此方法停止线程
+    def stop(self):
+        self.running = False
+        if self._socket:
+            try:
+                # 关闭socket以中断阻塞的recv调用
+                self._socket.shutdown(socket.SHUT_RDWR)
+                self._socket.close()
+            except OSError:
+                pass
+        self.quit()
+        self.wait()
 
-        def send_command(self, command: str):
-            """发送文本命令到设备"""
-            if self._socket and self.running:
-                try:
-                    # 命令需要编码为字节串发送
-                    self._socket.sendall(command.encode('utf-8'))
-                    print(f"已发送命令: {command}")
-                except OSError as e:
-                    self.connection_status.emit(f"命令发送失败: {e}")
-
-
+    def send_command(self, command: str):
+        """发送文本命令到设备"""
+        if self._socket and self.running:
+            try:
+                # 命令需要编码为字节串发送
+                self._socket.sendall(command.encode('utf-8'))
+                print(f"已发送命令: {command}")
+            except OSError as e:
+                self.connection_status.emit(f"命令发送失败: {e}")
 
 # # --- 程序从这里开始运行 ---
 if __name__ == "__main__":
