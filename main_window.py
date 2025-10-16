@@ -15,7 +15,7 @@ from main_window2 import DataParser, NetworkThread
 MCU_IP = "192.168.100.123"  # MCU的IP地址
 MCU_PORT = 5000             # MCU的通信端口
 
-
+#
 # 主界面窗口
 class MainWindow(QMainWindow):
     def __init__(self):
