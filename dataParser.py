@@ -18,13 +18,18 @@ class DataParser(QObject):
     一个专门用于解析DTS设备二进制通信协议的类。
     它接收原始字节数据，解析后通过信号发送出去。
     """
-    # 定义信号，用于发送解析后的数据
-    # 参数是解析后的数据结构，这里用dict或自定义类都可以，用dict更灵活
-    temperature_data_ready = pyqtSignal(dict)
-    # device_params_ready = pyqtSignal(dict)
-    # alarm_data_ready = pyqtSignal(dict)
+    # --- 常量定义 ---
+    TEMP_HEADER = b'\xAA\x7B\x07\xAF\xEC\x66\x48\xC5'               # 1、温度数据包
+    DEVICE_PARAM_HEADER= b'\xA9\x7B\x07\xAF\xEC\x66\x48\xC5'        # 2、设备相关参数包
+    FIXED_ALARM_HEADER = b'\xA6\x7B\x07\xAF\xEC\x66\x48\xC5'        # 3、高温定温报警包
+    DIFF_ALARM_HEADER = b'\xA5\x7B\x07\xAF\xEC\x66\x48\xC5'         # 4、高温差温报警包
+    BREAK_ALARM_HEADER = b'\xBC\x7B\x07\xAF\xEC\x66\x48\xC5'        # 5、断纤报警包
 
-    # 其他数据类型的信号...
+    # --- 信号定义 ---
+    temperature_data_ready = pyqtSignal(dict)  # 参数是解析后的数据结构，这里用dict或自定义类都可以，用dict更灵活
+    device_params_ready = pyqtSignal(dict)
+    fixed_alarm_ready = pyqtSignal(dict)
+    diff_alarm_ready = pyqtSignal(dict)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -47,84 +52,80 @@ class DataParser(QObject):
                 break  # 数据不够，等待下一次接收
 
             # --- 检查数据头 ---
-            # 温度/Stokes/AntiStokes数据包
-            if self.buffer.startswith(b'\xAA\x7B\x07\xAF\xEC\x66\x48\xC5'):
-                # 根据协议，总数据长度在第9、10字节
+            if self.buffer.startswith(self.TEMP_HEADER):       # 温度/Stokes/AntiStokes数据包
                 total_len_low = self.buffer[9]    #低位在前
                 total_len_high = self.buffer[10]  #高位在后
-                total_len = total_len_low + (total_len_high << 8)
-                print(total_len)            #查看要接收的数据长度
-                print(len(self.buffer))     #查看已经！！接收的数据长度
-                # total_len是总数据部分的长度，根据规律，温度数据长度恒为16023字节
+                total_len = total_len_low + (total_len_high << 8)   # 计算总数据部分的长度，根据规律，温度数据长度恒为16023字节
                 expected_packet_size = total_len    #此数据应恒为16023
-                if self.buffer.endswith(b'\x55'):
-                    print("是的2")
 
                 if len(self.buffer) >= expected_packet_size:
                     # 缓冲区数据足够，可以解析一个完整包
                     packet = self.buffer[:expected_packet_size]
                     # 检查结尾符
                     if packet.endswith(b'\x55'):
-                        # 数据类型标志位在第11字节
-                        data_type = packet[11]
-                        if data_type == 0x00:  # 假设0x00代表温度数据
-                            self._parse_temperature_packet(packet)
-                        # else:
-                        #     self._parse_stokes_packet(packet) 等...
-
-                    # 从缓冲区移除已处理的数据包
-                    self.buffer = self.buffer[expected_packet_size:]
+                        self._parse_temperature_packet(packet)
+                        self.buffer = self.buffer[expected_packet_size:]  # 从缓冲区移除已处理的数据包
+                        break
+                    else:
+                        print(f"错误: 包大小匹配 (但结束标记错误！丢弃包头并重新同步。")
+                        self.buffer = self.buffer[8:]
+                        break  # 跳出 for 循环, 回到 while 循环
                 else:
                     # 数据包不完整，跳出循环等待更多数据
                     break
 
-            # --- 检查设备参数数据头 ---
-            elif self.buffer.startswith(b'\xA9\x7B\x07\xAF\xEC\x66\x48\xC5'):
-                # 设备参数包是固定长度88字节
-                if len(self.buffer) >= 88:
-                    packet = self.buffer[:88]
+            # --- 检查设备参数 数据头 ---
+            elif self.buffer.startswith(self.DEVICE_PARAM_HEADER):
+                total_len_low = self.buffer[9]  # 低位在前
+                total_len_high = self.buffer[10]  # 高位在后
+                total_len = total_len_low + (total_len_high << 8)  # 计算总数据部分的长度，根据规律，设备数据长度恒为88字节
+                expected_packet_size = total_len    #此数据应恒为88
+                if len(self.buffer) >= expected_packet_size:
+                    packet = self.buffer[:expected_packet_size]
                     if packet.endswith(b'\x55'):
                         self._parse_device_params_packet(packet)
-                    self.buffer = self.buffer[88:]
+                    self.buffer = self.buffer[expected_packet_size:]
                 else:
                     break
 
-            # --- 检查高温报警数据头 ---
-            # elif self.buffer.startswith(b'\xA6\x7B\x07\xAF\xEC\x66\x48\xC5'):
-            #     total_len_low = self.buffer[9]
-            #     total_len_high = self.buffer[10]
-            #     total_len = total_len_low + (total_len_high << 8)
-            #     # 假设total_len是纯数据部分的长度，根据规律，温度数据长度恒为16023字节
-            #     expected_packet_size = 22 + total_len  # 此数据应恒为16023
-            #     # 协议中对total_len的定义似乎是指纯数据长度，需要与实际设备确认
-            #     # 我们先假设 total_len 是整个数据帧的长度（从第0位到结尾）
-            #     expected_packet_size = total_len
-            #
-            #     if len(self.buffer) >= expected_packet_size:
-            #         # 缓冲区数据足够，可以解析一个完整包
-            #         packet = self.buffer[:expected_packet_size]
-            #
-            #         # 检查结尾符
-            #         if packet.endswith(b'\x55'):
-            #             # 数据类型标志位在第11字节
-            #             data_type = packet[11]
-            #             if data_type == 0x00:  # 假设0x00代表温度数据
-            #                 self._parse_temperature_packet(packet)
-            #             # else:
-            #             #     self._parse_stokes_packet(packet) 等...
-            #
-            #         # 从缓冲区移除已处理的数据包
-            #         self.buffer = self.buffer[expected_packet_size:]
-            #     else:
-            #         # 数据包不完整，跳出循环等待更多数据
-            #         break
+            # --- 检查高温定温报警数据头 ---
+            elif self.buffer.startswith(self.FIXED_ALARM_HEADER):
+                total_len_low = self.buffer[9]
+                total_len_high = self.buffer[10]
+                total_len = total_len_low + (total_len_high << 8)
+                expected_packet_size = 22 + total_len  # 计算总数据部分的长度，高温备数据长度恒为26字节
+                expected_packet_size = total_len        #此数据应恒为26
 
+                if len(self.buffer) >= expected_packet_size:
+                    packet = self.buffer[:expected_packet_size]
+                    if packet.endswith(b'\x55'):
+                            self._parse_alarm_params_packet()
+                    self.buffer = self.buffer[expected_packet_size:]
+                else:
+
+                    break
+            # --- 检查高温差温报警数据头 ---
+            elif self.buffer.startswith(self.DIFF_ALARM_HEADER):
+                total_len_low = self.buffer[9]
+                total_len_high = self.buffer[10]
+                total_len = total_len_low + (total_len_high << 8)
+                expected_packet_size = 22 + total_len  # 计算总数据部分的长度，高温备数据长度恒为26字节
+                expected_packet_size = total_len        #此数据应恒为26
+
+                if len(self.buffer) >= expected_packet_size:
+                    packet = self.buffer[:expected_packet_size]
+                    if packet.endswith(b'\x55'):
+                            self._parse_alarm_params_packet()
+                    self.buffer = self.buffer[expected_packet_size:]
+                else:
+
+                    break
             else:
                 # 如果缓冲区开头不是任何已知的数据头，说明数据同步出错
                 # 寻找下一个可能的包头 b'\xAA' 或 b'\xA9'
                 print("数据包头错误，正在尝试同步...")
-                next_aa = self.buffer.find(b'\xAA', 1)
-                next_a9 = self.buffer.find(b'\xA9', 1)
+                # next_aa = self.buffer.find(b'\xAA', 1)
+                # next_a9 = self.buffer.find(b'\xA9', 1)
 
                 # 找到最近的一个包头
     #             positions = [p for p in [next_aa, next_a9] if p != -1]
@@ -139,9 +140,8 @@ class DataParser(QObject):
     def _parse_temperature_packet(self, packet: bytes):
         """解析温度数据包"""
         print(f"温度数据包接收成功！接收到 {len(packet)}字节数据")
-        # 已经接收到16023个字节，这是一个完整的温度数据包
         try:
-            pass
+
             # 根据协议文档解析头部信息
             # '<' 表示小端序（低位在前高位在后）
             # 'B' 表示 unsigned char (1 byte)
@@ -176,15 +176,12 @@ class DataParser(QObject):
             raw_temps_np = np.array(raw_temps_tuple)
 
             # 实际温度 = 解调值 / 100
-            actual_temps = (raw_temps_np - 20000) / 100.0
-
+            # actual_temps = (raw_temps_np - 20000) / 100.0
+            actual_temps = (raw_temps_np) / 100.0
             parsed["temperatures"] = actual_temps
 
             print(f"通道 {parsed['channel_id']} 收到 {len(actual_temps)} 个温度点")
-            # print(actual_temps)
-            # 发送信号
             self.temperature_data_ready.emit(parsed)
-
         except Exception as e:
             print(f"解析温度数据包失败: {e}")
 
@@ -207,3 +204,7 @@ class DataParser(QObject):
     #         self.device_params_ready.emit(params)
     #     except Exception as e:
     #         print(f"解析设备参数包失败: {e}")
+
+    def _parse_alarm_params_packet(self, packet: bytes):
+
+        pass

@@ -14,17 +14,19 @@ import pyqtgraph as pg
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QGroupBox, QListWidget, QPushButton, QLabel, QTableWidget,
-    QTableWidgetItem, QAbstractItemView, QHeaderView, QMenuBar, QAction, QStatusBar, QRadioButton, QMessageBox
+    QTableWidgetItem, QAbstractItemView, QHeaderView, QMenuBar, QAction, QStatusBar, QRadioButton, QMessageBox, QDialog
 )
 from PyQt5.QtGui import QFont, QIcon
 from PyQt5.QtCore import Qt, pyqtSlot
+from measurement_param_dialog import FiberMeasurementParamsDialog
+from coeff_calibration_dialog import FiberCoeffCalibrationDialog
+from run_record_dialog import RunRecordSettingsDialog
 from network_manager import NetworkManager
 from dataParser import DataParser
 
 # 配置网络参数
-MCU_IP = "192.168.100.123"  # MCU的IP地址
-MCU_PORT = 5000             # MCU的通信端口
-
+MCU_IP = "192.168.100.10"  # MCU的IP地址
+MCU_PORT = 5001             # MCU的通信端口
 
 # 主界面窗口
 class MainWindow(QMainWindow):
@@ -74,7 +76,7 @@ class MainWindow(QMainWindow):
 
         # d.启动初始连接 (代替 network_thread.start())
         #   这是一个非阻塞调用
-        self.network_manager.connect_to_host(MCU_IP,MCU_PORT)
+        self.network_manager.connect_to_host(MCU_IP, MCU_PORT)
 
     def _create_menu_bar(self):
         menu_bar = self.menuBar()
@@ -96,10 +98,57 @@ class MainWindow(QMainWindow):
         # 当用户点击“设备断开”选项时，会调用 self.disconnect_device 方法
         disconnect_action.triggered.connect(self.disconnect_device)
 
-        # --- 2. 创建其他顶层菜单 ---
-        menus = ["显示设置", "权限管理", "设备配置", "运行记录", "报警分区及转发", "技术支持"]
+        # --- 2. 创建“设备配置”下拉菜单 ---
+        # 首先，我们添加一个名为“设备配置”的主菜单项
+        config_menu = menu_bar.addMenu("设备配置")
+
+        # 然后，创建两个QAction（下拉框里的具体选项）
+        fiber_measurement_params_action = QAction("光纤测量参数", self)
+        fiber_coefficient_calibration_action = QAction("光纤系数校准", self)
+
+        # 将这两个Action添加到“设备配置”主菜单下
+        config_menu.addAction(fiber_measurement_params_action)
+        config_menu.addAction(fiber_coefficient_calibration_action)
+
+        # 将Action的triggered信号连接到对应的槽函数
+        fiber_measurement_params_action.triggered.connect(self.open_dialog_fiber_measurement_params)
+        fiber_coefficient_calibration_action.triggered.connect(self.open_dialog_fiber_coefficient_calibration)
+
+        # --- 3. 创建“保存数据”下拉菜单 ---
+        record_menu = menu_bar.addMenu("保存数据")
+        action_record_settings = QAction("保存数据", self)
+        action_record_settings.triggered.connect(self.open_record_dialog)
+        record_menu.addAction(action_record_settings)
+
+        # --- 4. 创建其他顶层菜单 ---
+        menus = ["显示设置", "权限管理", "运行记录", "报警分区及转发", "技术支持"]
         for menu_name in menus:
             menu_bar.addMenu(menu_name)
+
+    def open_record_dialog(self):
+        """弹出运行记录设置窗口"""
+        dialog = RunRecordSettingsDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            # 这里可以添加更新全局配置的逻辑
+            pass
+
+    def open_dialog_fiber_measurement_params(self):
+        """打开光纤测量参数窗口"""
+        # 实例化对话框，传入 self 作为父对象，这样弹窗会居中在主窗口
+        dialog = FiberMeasurementParamsDialog(self)
+
+        # 显示窗口
+        # 方法 A: dialog.exec_() -> 模态窗口 (推荐)
+        # 用户必须关闭这个窗口才能操作主界面，防止参数没配完就去点别的
+        if dialog.exec_() == QDialog.Accepted:
+            print("用户点击了保存/确定")
+
+    def open_dialog_fiber_coefficient_calibration(self):
+        """打开光纤系数校准窗口"""
+        dialog = FiberCoeffCalibrationDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            print("校准参数已保存")
+
 
     def connect_device(self):
         """处理点击“设备连接”菜单项的逻辑"""
@@ -186,6 +235,9 @@ class MainWindow(QMainWindow):
         zoom_groupbox = QGroupBox()
         zoom_layout = QHBoxLayout()  # 用水平布局来排列单选按钮
 
+        self.temp_start_button = QPushButton("温度监测开启")
+        self.temp_end_button = QPushButton("温度监测暂停")
+
         self.rb_zoom_xy = QRadioButton("矩阵缩放")
         self.rb_zoom_x = QRadioButton("X轴缩放")
         self.rb_zoom_y = QRadioButton("Y轴缩放")
@@ -195,6 +247,7 @@ class MainWindow(QMainWindow):
         # self.help_button.setFixedSize(25, 25)
         self.help_button.setToolTip("图形窗口快捷键说明")
 
+        zoom_layout.addWidget(self.temp_start_button)
         zoom_layout.addStretch()  # 添加伸缩项，让按钮靠左排列
         zoom_layout.addWidget(self.rb_zoom_xy)
         zoom_layout.addWidget(self.rb_zoom_x)
@@ -229,6 +282,7 @@ class MainWindow(QMainWindow):
         self._add_sample_log_data()
 
         #将按钮的点击信号连接到槽函数
+        self.temp_start_button.clicked.connect(self.temp_start_command)
         self.rb_zoom_xy.toggled.connect(self.on_zoom_mode_changed)
         self.rb_zoom_x.toggled.connect(self.on_zoom_mode_changed)
         self.rb_zoom_y.toggled.connect(self.on_zoom_mode_changed)
@@ -240,6 +294,23 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.log_table, 1)  # 表格比例为1
 
         return right_widget
+
+    @pyqtSlot()
+    def temp_start_command(self):
+        """
+        发送接收温度数据的命令
+        """
+        command_string = "[E]>START#"
+        self.network_manager.socket.write(command_string.encode('utf-8'))
+        print("发送请求温度命令成功")
+
+    @pyqtSlot(str)
+    def update_status(self, message: str):
+        """更新状态栏的文本，并记录到日志"""
+        self.statusBar.showMessage(message)
+        # 自动将所有状态消息添加到日志
+        # if "已连接" in message or "错误" in message or "断开" in message:
+        #     self.add_log_entry("状态", message)
 
     @pyqtSlot()
     def show_zoom_help_popup(self):
@@ -256,6 +327,7 @@ class MainWindow(QMainWindow):
             "• 仅X轴: 锁定Y轴。鼠标操作将只影响水平方向的缩放和平移。\n\n"
             "• 仅Y轴: 锁定X轴。鼠标操作将只影响垂直方向的缩放和平移。"
         )
+
     @pyqtSlot(bool)
     def on_zoom_mode_changed(self, checked):
         """
@@ -317,6 +389,12 @@ class MainWindow(QMainWindow):
         # 插入一些空行
         for i in range(5):
             self.log_table.insertRow(self.log_table.rowCount())
+
+    @pyqtSlot()
+    def disconnect_device(self):
+        """槽函数：响应“设备断开”菜单项"""
+        print("正在断开连接...")
+        self.network_manager.disconnect_from_host()
 
     def closeEvent(self, event):
         """重写窗口关闭事件，确保在关闭窗口时，后台线程也能被安全地停止。"""

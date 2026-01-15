@@ -16,11 +16,9 @@
 # -----------------------------------------------------------------------------
 from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
 from PyQt5.QtNetwork import QTcpSocket, QAbstractSocket
-from old_folder.network_thread import DataParser
 # QTcpSocket 是一个专门为 TCP 通信设计好的、功能完整的类（Class）
+from dataParser import DataParser
 
-MCU_IP = "192.168.100.123"  # MCU的IP地址
-MCU_PORT = 5000             # MCU的通信端口
 
 class NetworkManager(QObject):
     """
@@ -40,8 +38,8 @@ class NetworkManager(QObject):
         self.socket = QTcpSocket(self)   # 内部的构造函数已经完成了连接MCU的底层设置
         self.parser = parser
 
-        self.host = MCU_IP
-        self.port = MCU_PORT
+        self.host = ""
+        self.port = 0
 
         # --- 核心: 连接 QTcpSocket 的内置信号到我们的槽函数 ---
 
@@ -52,11 +50,9 @@ class NetworkManager(QObject):
         self.socket.disconnected.connect(self.on_disconnected)
 
         # 3. 当有新数据到达网络缓冲区时触发
-        #    这取代了 'while True: socket.recv()' 循环
         self.socket.readyRead.connect(self.on_ready_read)
 
         # 4. 当发生错误时触发
-        #    注意: 旧的 .error() 信号已弃用，使用 .errorOccurred()
         self.socket.errorOccurred.connect(self.on_error)
 
     # --- QTcpSocket 的槽函数 ---
@@ -68,12 +64,14 @@ class NetworkManager(QObject):
         self.connection_status.emit(status_msg)
         print(status_msg)
 
+
     @pyqtSlot()
     def on_disconnected(self):
         """当套接字断开连接时由 .disconnected 信号触发"""
         status_msg = "🔌 连接已断开。"
         self.connection_status.emit(status_msg)
         print(status_msg)
+
 
     @pyqtSlot()
     def on_ready_read(self):
@@ -98,6 +96,7 @@ class NetworkManager(QObject):
         self.connection_status.emit(status_msg)
         print(f"{status_msg} (代码: {socket_error})")
 
+
     # --- 公共控制方法 (由 MainWindow 调用) ---
 
     @pyqtSlot(str, int)
@@ -116,16 +115,30 @@ class NetworkManager(QObject):
         # 如果之前有连接，先断开
         if self.socket.state() != QAbstractSocket.UnconnectedState:
             self.socket.abort()
-
         self.socket.connectToHost(host, port)    #非阻塞调用，不会像 socket.connect() 那样卡住程序
+
 
     @pyqtSlot()
     def disconnect_from_host(self):
         """由 MainWindow 调用以主动断开连接。"""
         if self.socket.state() == QAbstractSocket.ConnectedState:
+            print("NetworkManager: 发送断开请求...")
+
+            # 1. 发送断开指令 (优雅关闭，发送 FIN 包)
             self.socket.disconnectFromHost()
+
+            # 2. 【关键】阻塞等待最多1秒，确保数据发送完毕
+            # 如果不加这一句，主程序退出太快，Socket对象被销毁，FIN包可能发不出去
+            if self.socket.state() != QAbstractSocket.UnconnectedState:
+                self.socket.waitForDisconnected(1000)
+
+            print("NetworkManager: 已断开")
+
         elif self.socket.state() == QAbstractSocket.ConnectingState:
             self.socket.abort()  # 如果正在连接中，则中止
+
+        else:
+            print("NetworkManager: 当前未连接，无需断开")
         print("断开连接指令已发出。")
 
     @pyqtSlot(str)
@@ -147,3 +160,13 @@ class NetworkManager(QObject):
             status_msg = "❌ 发送失败: 未连接"
             self.connection_status.emit(status_msg)
             print(status_msg)
+
+
+# # --- 程序从这里开始运行 ---
+if __name__ == "__main__":
+    MCU_IP = "192.168.100.123"  # MCU的IP地址
+    MCU_PORT = 5001  # MCU的通信端口
+
+    parser = DataParser()
+    network_manager = NetworkManager(parser)
+    network_manager.connect_to_host(MCU_IP, MCU_PORT)
